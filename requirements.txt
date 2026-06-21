@@ -1,6 +1,2 @@
-<<<<<<< HEAD
-﻿fastapi
+fastapi
 uvicorn
-=======
-
->>>>>>> b53d9d90fc91fba95f2a872a0e5a58e34fe4a3b7
