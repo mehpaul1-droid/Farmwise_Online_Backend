@@ -4,7 +4,6 @@ import sqlite3
 
 app = FastAPI()
 
-# ---------------- DB INIT ----------------
 def init_db():
     conn = sqlite3.connect("farmwise.db")
     c = conn.cursor()
@@ -21,12 +20,10 @@ def init_db():
 
 init_db()
 
-# ---------------- MODEL ----------------
 class User(BaseModel):
     phone: str
     password: str
 
-# ---------------- REGISTER ----------------
 @app.post("/register")
 def register(user: User):
     conn = sqlite3.connect("farmwise.db")
@@ -38,13 +35,21 @@ def register(user: User):
             (user.phone, user.password, "worker")
         )
         conn.commit()
-        return {"status": "ok", "message": "registered"}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
+
+        return {
+            "status": "ok",
+            "message": "ثبت‌نام با موفقیت انجام شد"
+        }
+
+    except sqlite3.IntegrityError:
+        return {
+            "status": "error",
+            "message": "این شماره قبلاً ثبت شده است"
+        }
+
     finally:
         conn.close()
 
-# ---------------- LOGIN ----------------
 @app.post("/login")
 def login(user: User):
     conn = sqlite3.connect("farmwise.db")
@@ -59,5 +64,12 @@ def login(user: User):
     conn.close()
 
     if result:
-        return {"status": "ok", "role": result[3]}
-    return {"status": "fail"}
+        return {
+            "status": "ok",
+            "role": result[3]
+        }
+
+    return {
+        "status": "error",
+        "message": "شماره یا رمز اشتباه است"
+    }
