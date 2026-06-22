@@ -27,4 +27,3 @@ def ai(data: dict):
         "result": "AI analysis OK",
         "score": 87
     }
-}
