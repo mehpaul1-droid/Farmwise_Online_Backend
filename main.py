@@ -4,27 +4,16 @@ import sqlite3
 
 app = FastAPI()
 
-# ---------------- DB ----------------
 def init_db():
     conn = sqlite3.connect("farmwise.db")
     c = conn.cursor()
 
     c.execute("""
-        CREATE TABLE IF NOT EXISTS farms (
+        CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT,
-            income REAL,
-            cost REAL
-        )
-    """)
-
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS livestock (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            farm_id INTEGER,
-            name TEXT,
-            type TEXT,
-            weight REAL
+            phone TEXT UNIQUE,
+            password TEXT,
+            role TEXT
         )
     """)
 
@@ -33,100 +22,69 @@ def init_db():
 
 init_db()
 
-# ---------------- MODELS ----------------
-class Farm(BaseModel):
-    name: str
-    income: float
-    cost: float
+class User(BaseModel):
+    phone: str
+    password: str
 
-class Livestock(BaseModel):
-    farm_id: int
-    name: str
-    type: str
-    weight: float
+# ---------------- REGISTER FIXED ----------------
+@app.post("/register")
+def register(user: User):
+    conn = sqlite3.connect("farmwise.db")
+    c = conn.cursor()
 
-# ---------------- FARMS ----------------
-@app.post("/farm/add")
-def add_farm(farm: Farm):
+    try:
+        c.execute(
+            "INSERT INTO users (phone, password, role) VALUES (?, ?, ?)",
+            (user.phone, user.password, "worker")
+        )
+        conn.commit()
+
+        return {
+            "status": "success",
+            "message": "ثبت‌نام با موفقیت انجام شد"
+        }
+
+    except sqlite3.IntegrityError:
+        return {
+            "status": "error",
+            "error_type": "USER_EXISTS",
+            "message": "این شماره قبلاً ثبت شده است"
+        }
+
+    except Exception as e:
+        return {
+            "status": "error",
+            "error_type": "UNKNOWN",
+            "message": str(e)
+        }
+
+    finally:
+        conn.close()
+
+
+# ---------------- LOGIN FIXED ----------------
+@app.post("/login")
+def login(user: User):
     conn = sqlite3.connect("farmwise.db")
     c = conn.cursor()
 
     c.execute(
-        "INSERT INTO farms (name, income, cost) VALUES (?, ?, ?)",
-        (farm.name, farm.income, farm.cost)
+        "SELECT * FROM users WHERE phone=? AND password=?",
+        (user.phone, user.password)
     )
 
-    conn.commit()
+    result = c.fetchone()
     conn.close()
 
-    return {"status": "ok"}
-
-@app.get("/farm/list")
-def list_farms():
-    conn = sqlite3.connect("farmwise.db")
-    c = conn.cursor()
-
-    c.execute("SELECT * FROM farms")
-    data = c.fetchall()
-
-    conn.close()
-
-    return {"data": data}
-
-# ---------------- LIVESTOCK ----------------
-@app.post("/livestock/add")
-def add_livestock(item: Livestock):
-    conn = sqlite3.connect("farmwise.db")
-    c = conn.cursor()
-
-    c.execute(
-        "INSERT INTO livestock (farm_id, name, type, weight) VALUES (?, ?, ?, ?)",
-        (item.farm_id, item.name, item.type, item.weight)
-    )
-
-    conn.commit()
-    conn.close()
-
-    return {"status": "ok"}
-
-@app.get("/livestock/list")
-def list_livestock():
-    conn = sqlite3.connect("farmwise.db")
-    c = conn.cursor()
-
-    c.execute("SELECT * FROM livestock")
-    data = c.fetchall()
-
-    conn.close()
-
-    return {"data": data}
-
-# ---------------- SHI CALC ----------------
-@app.get("/shi/profit/{farm_id}")
-def shi_profit(farm_id: int):
-
-    conn = sqlite3.connect("farmwise.db")
-    c = conn.cursor()
-
-    c.execute("SELECT income, cost FROM farms WHERE id=?", (farm_id,))
-    farm = c.fetchone()
-
-    conn.close()
-
-    if not farm:
-        return {"status": "error"}
-
-    income = farm[0]
-    cost = farm[1]
-
-    # SHI reduction simulation
-    shi_saving = cost * 0.25
-    final_cost = cost - shi_saving
-    profit = income - final_cost
+    if result:
+        return {
+            "status": "success",
+            "message": "ورود موفق",
+            "role": result[3]
+        }
 
     return {
-        "income": income,
-        "cost": cost,
-        "shi_saving": shi_saving,
-        "final_profit": profit
+        "status": "error",
+        "error_type": "INVALID_CREDENTIALS",
+        "message": "شماره موبایل یا رمز عبور اشتباه است"
     }
