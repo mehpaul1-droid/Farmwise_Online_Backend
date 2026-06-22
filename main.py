@@ -10,30 +10,21 @@ def init_db():
     c = conn.cursor()
 
     c.execute("""
-        CREATE TABLE IF NOT EXISTS users (
+        CREATE TABLE IF NOT EXISTS farms (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            phone TEXT UNIQUE,
-            password TEXT,
-            role TEXT
+            name TEXT,
+            income REAL,
+            cost REAL
         )
     """)
 
     c.execute("""
         CREATE TABLE IF NOT EXISTS livestock (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            farm_id TEXT,
+            farm_id INTEGER,
             name TEXT,
             type TEXT,
             weight REAL
-        )
-    """)
-
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS farms (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT,
-            income REAL,
-            cost REAL
         )
     """)
 
@@ -43,106 +34,99 @@ def init_db():
 init_db()
 
 # ---------------- MODELS ----------------
-class User(BaseModel):
-    phone: str
-    password: str
-
-class Livestock(BaseModel):
-    farm_id: str
-    name: str
-    type: str
-    weight: float
-
 class Farm(BaseModel):
     name: str
     income: float
     cost: float
 
-# ---------------- AUTH ----------------
-@app.post("/register")
-def register(user: User):
-    conn = sqlite3.connect("farmwise.db")
-    c = conn.cursor()
-
-    try:
-        c.execute(
-            "INSERT INTO users (phone, password, role) VALUES (?, ?, ?)",
-            (user.phone, user.password, "worker")
-        )
-        conn.commit()
-        return {"status": "ok", "message": "ثبت‌نام موفق"}
-    except sqlite3.IntegrityError:
-        return {"status": "error", "message": "این شماره قبلاً ثبت شده است"}
-    finally:
-        conn.close()
-
-@app.post("/login")
-def login(user: User):
-    conn = sqlite3.connect("farmwise.db")
-    c = conn.cursor()
-
-    c.execute("SELECT * FROM users WHERE phone=? AND password=?",
-              (user.phone, user.password))
-
-    result = c.fetchone()
-    conn.close()
-
-    if result:
-        return {"status": "ok"}
-    return {"status": "error", "message": "ورود ناموفق"}
-
-# ---------------- LIVESTOCK ----------------
-@app.post("/add-livestock")
-def add_livestock(item: Livestock):
-    conn = sqlite3.connect("farmwise.db")
-    c = conn.cursor()
-
-    c.execute("""
-        INSERT INTO livestock (farm_id, name, type, weight)
-        VALUES (?, ?, ?, ?)
-    """, (item.farm_id, item.name, item.type, item.weight))
-
-    conn.commit()
-    conn.close()
-
-    return {"status": "ok"}
-
-@app.get("/livestock")
-def get_livestock():
-    conn = sqlite3.connect("farmwise.db")
-    c = conn.cursor()
-
-    c.execute("SELECT * FROM livestock")
-    rows = c.fetchall()
-
-    conn.close()
-
-    return {"data": rows}
+class Livestock(BaseModel):
+    farm_id: int
+    name: str
+    type: str
+    weight: float
 
 # ---------------- FARMS ----------------
-@app.post("/add-farm")
+@app.post("/farm/add")
 def add_farm(farm: Farm):
     conn = sqlite3.connect("farmwise.db")
     c = conn.cursor()
 
-    c.execute("""
-        INSERT INTO farms (name, income, cost)
-        VALUES (?, ?, ?)
-    """, (farm.name, farm.income, farm.cost))
+    c.execute(
+        "INSERT INTO farms (name, income, cost) VALUES (?, ?, ?)",
+        (farm.name, farm.income, farm.cost)
+    )
 
     conn.commit()
     conn.close()
 
     return {"status": "ok"}
 
-@app.get("/farms")
-def get_farms():
+@app.get("/farm/list")
+def list_farms():
     conn = sqlite3.connect("farmwise.db")
     c = conn.cursor()
 
     c.execute("SELECT * FROM farms")
-    rows = c.fetchall()
+    data = c.fetchall()
 
     conn.close()
 
-    return {"data": rows}
+    return {"data": data}
+
+# ---------------- LIVESTOCK ----------------
+@app.post("/livestock/add")
+def add_livestock(item: Livestock):
+    conn = sqlite3.connect("farmwise.db")
+    c = conn.cursor()
+
+    c.execute(
+        "INSERT INTO livestock (farm_id, name, type, weight) VALUES (?, ?, ?, ?)",
+        (item.farm_id, item.name, item.type, item.weight)
+    )
+
+    conn.commit()
+    conn.close()
+
+    return {"status": "ok"}
+
+@app.get("/livestock/list")
+def list_livestock():
+    conn = sqlite3.connect("farmwise.db")
+    c = conn.cursor()
+
+    c.execute("SELECT * FROM livestock")
+    data = c.fetchall()
+
+    conn.close()
+
+    return {"data": data}
+
+# ---------------- SHI CALC ----------------
+@app.get("/shi/profit/{farm_id}")
+def shi_profit(farm_id: int):
+
+    conn = sqlite3.connect("farmwise.db")
+    c = conn.cursor()
+
+    c.execute("SELECT income, cost FROM farms WHERE id=?", (farm_id,))
+    farm = c.fetchone()
+
+    conn.close()
+
+    if not farm:
+        return {"status": "error"}
+
+    income = farm[0]
+    cost = farm[1]
+
+    # SHI reduction simulation
+    shi_saving = cost * 0.25
+    final_cost = cost - shi_saving
+    profit = income - final_cost
+
+    return {
+        "income": income,
+        "cost": cost,
+        "shi_saving": shi_saving,
+        "final_profit": profit
+    }
